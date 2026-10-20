@@ -16,20 +16,22 @@
 } }
 </script>
 <style>
-/* Layout: full-viewport WebGL stage; instrument panels float in a 3x2 grid around an empty centre. */
+/* Layout: full-viewport WebGL stage; instrument panels float in a 3x2 grid around an empty centre.
+   Palette: deep teal-black ground with photocathode-gold controls (the colour of JUNO's 20" PMTs). */
 :root {
-  --bg: #030E17;
-  --panel: rgba(6, 26, 42, 0.72);
-  --panel-solid: #071b2b;
-  --line: rgba(110, 139, 255, 0.26);
-  --grid: rgba(127, 152, 174, 0.16);
-  --plot-bg: rgba(3, 14, 23, 0.6);
-  --fg: #E6F0FA;
-  --fg2: #7F98AE;
-  --accent: #2251FF;
-  --hi: #6E8BFF;
+  --bg: #050D0C;
+  --panel: rgba(9, 22, 20, 0.76);
+  --panel-solid: #0a1816;
+  --line: rgba(226, 170, 82, 0.26);
+  --grid: rgba(150, 172, 163, 0.15);
+  --plot-bg: rgba(4, 12, 11, 0.6);
+  --fg: #EEF2EC;
+  --fg2: #8EA39A;
+  --accent: #E0A23B;
+  --hi: #F2C46D;
   --ok: #3DDC84;
-  --warn: #FFB547;
+  --warn: #4FD1C5;
+  --on-accent: #1b1204;
   --display: "Chakra Petch", "Rajdhani", "Segoe UI", system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   --body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -43,22 +45,23 @@ body { background: var(--bg); color: var(--fg); font: 13px/1.45 var(--body); mar
 button, select, input { font: inherit; color: inherit; }
 :focus-visible { outline: 1.5px solid var(--hi); outline-offset: 2px; }
 
-#stage { position: fixed; inset: 0; background: radial-gradient(ellipse at 50% 45%, #08243a 0%, #041523 45%, var(--bg) 80%); }
+#stage { position: fixed; inset: 0; background: radial-gradient(ellipse at 50% 45%, #0b2622 0%, #071715 45%, var(--bg) 80%); }
 #gl { display: block; width: 100%; height: 100%; touch-action: none; }
 .fx-vignette, .fx-scan { position: absolute; inset: 0; pointer-events: none; }
 .fx-vignette { background: radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(0, 4, 10, 0.75) 100%); }
 .fx-scan { background: repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 3px); mix-blend-mode: screen; }
 #labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
-.lbl { position: absolute; transform: translate(10px, -50%); font: 500 10px/1 var(--mono); letter-spacing: 0.06em; color: #bcd0e6; white-space: nowrap; padding: 3px 6px; background: rgba(3, 14, 23, 0.6); border-left: 1px solid var(--hi); }
+.lbl { position: absolute; transform: translate(10px, -50%); font: 500 10px/1 var(--mono); letter-spacing: 0.06em; color: #e4dccb; white-space: nowrap; padding: 3px 6px; background: rgba(4, 12, 11, 0.62); border-left: 1px solid var(--hi); }
 .lbl::before { content: ""; position: absolute; left: -11px; top: 50%; width: 10px; height: 1px; background: var(--hi); }
-#banner { position: absolute; left: 50%; top: 16%; transform: translateX(-50%); font: 500 12px var(--mono); letter-spacing: 0.08em; color: var(--warn); background: rgba(3, 14, 23, 0.8); border: 1px solid rgba(255, 181, 71, 0.4); padding: 6px 12px; pointer-events: none; }
+#banner { position: absolute; left: 50%; top: 16%; transform: translateX(-50%); font: 500 12px var(--mono); letter-spacing: 0.08em; color: var(--warn); background: rgba(4, 12, 11, 0.82); border: 1px solid rgba(79, 209, 197, 0.45); padding: 6px 12px; pointer-events: none; }
 #nogl { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--fg2); }
-.stage-tools { position: absolute; left: 50%; transform: translateX(-50%); bottom: 236px; display: flex; gap: 8px; pointer-events: auto; }
-.stage-hint { position: absolute; left: 50%; transform: translateX(-50%); bottom: 214px; font: 10px var(--mono); letter-spacing: 0.14em; color: var(--fg2); text-transform: uppercase; white-space: nowrap; pointer-events: none; }
+.stage-tools { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(var(--bottom-h, 200px) + 36px); display: flex; gap: 8px; pointer-events: auto; }
+.stage-hint { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(var(--bottom-h, 200px) + 14px); font: 10px var(--mono); letter-spacing: 0.14em; color: var(--fg2); text-transform: uppercase; white-space: nowrap; pointer-events: none; }
 #drop { position: absolute; inset: 24px; border: 2px dashed var(--hi); display: grid; place-items: center; font: 600 16px var(--display); letter-spacing: 0.1em; background: rgba(3, 14, 23, 0.7); pointer-events: none; }
 
 #hud { position: fixed; inset: 0; display: grid; gap: 12px; padding-block: 16px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
-  grid-template-columns: 296px minmax(0, 1fr) 318px; grid-template-rows: minmax(0, 1fr) 200px;
+  --left-w: 296px; --right-w: 318px; --bottom-h: 200px;
+  grid-template-columns: var(--left-w) minmax(0, 1fr) var(--right-w); grid-template-rows: minmax(0, 1fr) var(--bottom-h);
   grid-template-areas: "left . right" "map seq plot"; pointer-events: none; }
 .col { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto; scrollbar-width: thin; pointer-events: none; }
 .col > * { pointer-events: auto; flex: none; }
@@ -91,9 +94,9 @@ h1 b { color: var(--accent); font-weight: 600; margin: 0 0.14em; }
 .evnum span { font: 500 10px var(--mono); letter-spacing: 0.2em; color: var(--fg2); }
 .evnum b { font: 500 26px var(--mono); letter-spacing: 0.06em; }
 .evcat { font: 500 18px var(--display); }
-.badge { align-self: flex-start; font: 600 9.5px var(--mono); letter-spacing: 0.18em; color: #cfe0ff; border: 1px solid var(--hi); padding: 4px 8px; display: inline-flex; gap: 6px; align-items: center; }
+.badge { align-self: flex-start; font: 600 9.5px var(--mono); letter-spacing: 0.18em; color: #f6e2b8; border: 1px solid var(--hi); padding: 4px 8px; display: inline-flex; gap: 6px; align-items: center; }
 .badge::before { content: ""; width: 6px; height: 6px; background: var(--hi); }
-.badge.genie { border-color: var(--warn); color: #ffe2b0; } .badge.genie::before { background: var(--warn); }
+.badge.genie { border-color: var(--warn); color: #c9f5ef; } .badge.genie::before { background: var(--warn); }
 .evmeta { font: 10.5px var(--mono); color: var(--fg2); }
 
 label.row, .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
@@ -101,19 +104,19 @@ label.row, .row { display: flex; align-items: center; justify-content: space-bet
 .chk { display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer; padding: 1.5px 0; }
 .chk input { appearance: none; width: 14px; height: 14px; border: 1px solid var(--hi); margin: 0 0 0 auto; display: grid; place-items: center; cursor: pointer; flex: none; }
 .chk input:checked { background: var(--accent); border-color: var(--accent); }
-.chk input:checked::after { content: ""; width: 6px; height: 3px; border: solid #fff; border-width: 0 0 1.5px 1.5px; transform: rotate(-45deg) translate(1px, -1px); }
+.chk input:checked::after { content: ""; width: 6px; height: 3px; border: solid var(--on-accent); border-width: 0 0 1.5px 1.5px; transform: rotate(-45deg) translate(1px, -1px); }
 .sw { width: 9px; height: 9px; flex: none; }
 select, input[type=number], input[type=text] { background: rgba(3, 14, 23, 0.7); border: 1px solid var(--line); padding: 5px 7px; font: 12px var(--mono); min-width: 0; border-radius: 0; }
 select { padding-right: 22px; }
 input[type=number] { width: 82px; text-align: right; }
 input[type=range] { width: 100%; accent-color: var(--hi); height: 18px; }
-.btn { background: rgba(34, 81, 255, 0.12); border: 1px solid var(--line); padding: 6px 10px; cursor: pointer; font: 600 11px var(--display); letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; }
+.btn { background: rgba(224, 162, 59, 0.1); border: 1px solid var(--line); padding: 6px 10px; cursor: pointer; font: 600 11px var(--display); letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; }
 .btn:hover { border-color: var(--hi); }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .btn kbd { font: 9px var(--mono); opacity: 0.7; }
 .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 3px; }
 .seg button { background: rgba(3, 14, 23, 0.6); border: 1px solid var(--line); padding: 6px 4px; cursor: pointer; font: 500 10.5px var(--mono); min-height: 30px; }
-.seg button[aria-pressed=true] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.seg button[aria-pressed=true] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
 .hr { height: 1px; background: var(--line); margin: 2px 0; }
 .note { font: 10.5px/1.4 var(--body); color: var(--fg2); }
@@ -131,7 +134,7 @@ input[type=range] { width: 100%; accent-color: var(--hi); height: 18px; }
 .pill.yes { color: var(--ok); } .pill.no { color: #ff8a8a; }
 .objlist { display: flex; flex-direction: column; gap: 3px; max-height: 168px; overflow-y: auto; }
 .obj { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 5px 8px; border: 1px solid var(--line); background: rgba(3, 14, 23, 0.45); cursor: pointer; font: 11.5px var(--body); text-align: left; }
-.obj[aria-pressed=true] { border-color: var(--hi); background: rgba(34, 81, 255, 0.18); }
+.obj[aria-pressed=true] { border-color: var(--hi); background: rgba(224, 162, 59, 0.16); }
 .obj em { font: normal 11px var(--mono); color: #b9cbe0; font-variant-numeric: tabular-nums; }
 .obj small { color: var(--fg2); font-size: 10.5px; }
 .readout { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 10px; font: 11px var(--mono); }
@@ -152,7 +155,7 @@ canvas.plot { width: 100%; flex: 1 1 0px; min-height: 0; height: 0; display: blo
 .step.on { color: var(--fg); border-color: var(--hi); } .step.done { color: #b9cbe0; border-color: rgba(110, 139, 255, 0.5); }
 .wins { display: flex; flex-wrap: wrap; gap: 4px; }
 .wins button { background: rgba(3, 14, 23, 0.6); border: 1px solid var(--line); padding: 3px 7px; font: 10.5px var(--mono); cursor: pointer; min-height: 26px; }
-.wins button[aria-pressed=true] { border-color: var(--warn); color: #ffe2b0; }
+.wins button[aria-pressed=true] { border-color: var(--warn); color: #c9f5ef; }
 .log { font: 10.5px/1.6 var(--mono); color: #9fb4c9; overflow-y: auto; min-height: 0; flex: 1; }
 .log div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
 .log div:hover { color: var(--fg); }
@@ -162,6 +165,30 @@ canvas.plot { width: 100%; flex: 1 1 0px; min-height: 0; height: 0; display: blo
 .tabs button[aria-pressed=true] { color: var(--fg); border-color: var(--line); }
 .hidden-sm { }
 
+
+/* resizable layout: drag the gutters between panels and the 3D view */
+.gutter { position: absolute; z-index: 5; pointer-events: auto; touch-action: none; }
+.gutter::after { content: ""; position: absolute; background: var(--accent); opacity: 0; transition: opacity .15s; }
+.gutter:hover::after, .gutter.drag::after { opacity: 0.7; }
+.g-left, .g-right { top: 16px; bottom: calc(var(--bottom-h) + 28px); width: 10px; cursor: col-resize; }
+.g-left { left: calc(max(16px, env(safe-area-inset-left, 0px)) + var(--left-w) + 1px); }
+.g-right { right: calc(max(16px, env(safe-area-inset-right, 0px)) + var(--right-w) + 1px); }
+.g-left::after, .g-right::after { left: 4px; top: 0; bottom: 0; width: 2px; }
+.g-bottom { left: 16px; right: 16px; bottom: calc(var(--bottom-h) + 17px); height: 10px; cursor: row-resize; }
+.g-bottom::after { top: 4px; left: 0; right: 0; height: 2px; }
+#hud.panels-off .panel, #hud.panels-off .masthead .evblock, #hud.panels-off .gutter { display: none; }
+#hud.panels-off .masthead { opacity: 0.85; }
+.vis-head, .vis-row { display: grid; grid-template-columns: 10px minmax(0, 1fr) 34px 34px; gap: 8px; align-items: center; }
+.vis-head { font: 500 9px var(--mono); letter-spacing: 0.12em; color: var(--fg2); text-transform: uppercase; padding-bottom: 2px; }
+.vis-head span:nth-child(n+3) { text-align: center; }
+.vis-head button { background: none; border: 0; padding: 0; font: inherit; letter-spacing: inherit; color: var(--fg2); cursor: pointer; text-transform: uppercase; }
+.vis-head button:hover { color: var(--hi); }
+.vis-row { font-size: 12.5px; padding: 1.5px 0; }
+.vis-row input { appearance: none; width: 14px; height: 14px; border: 1px solid var(--hi); margin: 0 auto; display: grid; place-items: center; cursor: pointer; }
+.vis-row input:checked { background: var(--accent); border-color: var(--accent); }
+.vis-row input:checked::after { content: ""; width: 6px; height: 3px; border: solid var(--on-accent); border-width: 0 0 1.5px 1.5px; transform: rotate(-45deg) translate(1px, -1px); }
+.vis-row input:disabled { opacity: 0.18; cursor: default; }
+@media (max-width: 1100px) { .gutter { display: none; } }
 @media (max-width: 1100px) {
   body { overflow: auto; }
   #stage { position: relative; height: 62vh; min-height: 420px; }
@@ -186,11 +213,12 @@ canvas.plot { width: 100%; flex: 1 1 0px; min-height: 0; height: 0; display: blo
   <div id="banner" hidden></div>
   <div id="drop" hidden>Drop a GENIE .gst.root file to load its events</div>
   <div id="nogl" hidden><div><p style="font:600 16px var(--display)">WebGL is not available in this browser.</p><p>The 3D view needs WebGL. Try a recent Chrome, Edge, Firefox or Safari, and check that hardware acceleration is switched on.</p></div></div>
-  <div class="stage-tools"><button class="btn" id="b-reset" title="Reset camera (R)">↺ Reset view</button><button class="btn" id="b-shot" title="Save a PNG of the 3D view">⤓ Capture</button></div>
+  <div class="stage-tools"><button class="btn" id="b-reset" title="Reset camera (R)">↺ Reset view</button><button class="btn" id="b-shot" title="Save a PNG of the 3D view">⤓ Capture</button><button class="btn" id="b-panels" title="Hide or show all panels (H)">◧ Hide panels</button><button class="btn" id="b-layout" title="Restore default panel sizes">⤢ Reset layout</button></div>
   <div class="stage-hint">Drag to orbit · scroll to zoom · right-drag to pan · click a track or PMT</div>
 </div>
 
 <div id="hud">
+  <div class="gutter g-left" data-g="left" title="Drag to resize"></div><div class="gutter g-right" data-g="right" title="Drag to resize"></div><div class="gutter g-bottom" data-g="bottom" title="Drag to resize"></div>
   <div class="col col-left">
     <header class="masthead">
       <div class="eyebrow">Jiangmen Underground Neutrino Observatory</div>
@@ -217,7 +245,7 @@ canvas.plot { width: 100%; flex: 1 1 0px; min-height: 0; height: 0; display: blo
         <div class="lab">Particles shown</div>
         <div class="legend" id="legend"></div>
         <div class="grid2">
-          <label class="chk">Labels<input type="checkbox" id="c-labels" checked></label>
+          <label class="chk">Light-front sphere<input type="checkbox" id="c-front"></label>
           <label class="chk">Truth tracks<input type="checkbox" id="c-truth" checked></label>
           <label class="chk">Auto orbit<input type="checkbox" id="c-orbit"></label>
           <label class="chk">Dark noise<input type="checkbox" id="c-dark"></label>
@@ -234,7 +262,7 @@ canvas.plot { width: 100%; flex: 1 1 0px; min-height: 0; height: 0; display: blo
 
   <div class="col col-right">
     <section class="panel" id="p-run">
-      <div class="ph"><span>Run control</span><span class="aux" id="run-state">PAUSED</span></div>
+      <div class="ph"><span>Run control</span><span style="display:flex;gap:8px;align-items:center"><span class="aux" id="run-state">PAUSED</span><button class="col-btn" aria-label="Collapse panel" data-col>–</button></span></div>
       <div class="pb">
         <div style="display:grid;grid-template-columns:1fr auto auto;gap:6px">
           <button class="btn primary" id="b-play" title="Play / pause (Space)">▶ Play <kbd>SPACE</kbd></button>
@@ -289,7 +317,7 @@ canvas.plot { width: 100%; flex: 1 1 0px; min-height: 0; height: 0; display: blo
     </section>
 
     <section class="panel" id="p-sum">
-      <div class="ph"><span>03 / Event summary</span><span class="aux" id="sum-win">PROMPT</span></div>
+      <div class="ph"><span>03 / Event summary</span><span style="display:flex;gap:8px;align-items:center"><span class="aux" id="sum-win">PROMPT</span><button class="col-btn" aria-label="Collapse panel" data-col>–</button></span></div>
       <div class="pb">
         <div class="bignum"><b id="s-big">—</b><span id="s-bigl">visible energy</span></div>
         <div class="kv" id="s-kv"></div>

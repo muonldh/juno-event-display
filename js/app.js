@@ -25,7 +25,7 @@ const S = {
   gen: { flav: 'cat', cur: 'cat', mode: 'auto', emode: 'fixed', E: 4, gamma: 2.7, Emin: 1, Emax: 20, dmode: 'fixed', cosZ: 0.45, phi: 35, vertex: 'fv', vx: 0, vy: 0, vz: 0,
     ibdMode: 'reactor', ibdE: 4, muMode: 'spectrum', muE: 200, muDir: 'sampled', through: true, spall: true, flux: null, fluxName: '' },
   genie: { rows: [], name: '', total: 0, unit: 1, first: 0 },
-  mode: 'cutaway', cutAngle: 110, opacity: 0.5, labels: true, truth: true, orbit: false, dark: false, spmtMap: false, autoWin: true,
+  mode: 'cutaway', cutAngle: 110, opacity: 0.5, front: false, lab: {}, truth: true, orbit: false, dark: false, spmtMap: false, autoWin: true,
   playing: false, rate: 0.5, filters: { mu: 1, e: 1, gamma: 1, chad: 1, p: 1, n: 1, nu: 1 }, pmtColor: 'charge', photons: 250,
   win: 0, sel: null, selPmt: null, plotTab: 'time',
 };
@@ -41,7 +41,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
 renderer.localClippingEnabled = true;
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x030e17, 0.0045);
+scene.fog = new THREE.FogExp2(0x050d0c, 0.0045);
 const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 800);
 camera.up.set(0, 0, 1);
 const controls = new OrbitControls(camera, canvas);
@@ -253,7 +253,7 @@ function applyAnim(p) {
   v.deps.geometry.setDrawRange(0, truth ? nd : 0);
   // light front
   const lf = (p - 0.24) / 0.5;
-  v.front.visible = lf > 0 && lf < 1 && cur.sim.deps.some(d => d.win === w);
+  v.front.visible = S.front && lf > 0 && lf < 1 && cur.sim.deps.some(d => d.win === w);
   if (v.front.visible) { v.front.position.set(...cur.frontC); v.front.scale.setScalar(0.5 + lf * 24); v.front.material.opacity = 0.16 * (1 - lf); }
   // photon rays
   const rg = v.rays.geometry, arr = rg.attributes.position.array; let nr = 0;
@@ -340,7 +340,7 @@ function tickLabels() {
   const W = canvas.clientWidth, H = canvas.clientHeight;
   det.labels.forEach((l, i) => {
     const g = det.groups[l.g], el = labelEls[i];
-    let vis = S.labels && g && isVisible(g);
+    let vis = !!S.lab[l.g] && g && (g.parent ? isVisible(g.parent) : true);
     if (vis) { tmpV.set(...l.p).applyMatrix4(g.matrixWorld).project(camera); vis = tmpV.z < 1 && Math.abs(tmpV.x) < 1.05 && Math.abs(tmpV.y) < 1.05; }
     el.style.display = vis ? '' : 'none';
     if (vis) el.style.transform = `translate(${((tmpV.x + 1) / 2) * W + 10}px, ${((1 - tmpV.y) / 2) * H}px) translateY(-50%)`;
@@ -363,7 +363,7 @@ function resize() {
   renderer.setSize(w, h, false); composer.setSize(w, h);
   camera.aspect = w / h;
   // keep the detector centred in the free area between the floating panels (desktop layout)
-  if (w >= 1100) { const L = $('.col-left').getBoundingClientRect().width, R = $('.col-right').getBoundingClientRect().width, B = $('#p-map').getBoundingClientRect().height + 12; camera.setViewOffset(w, h, (R - L) / 2, B / 2, w, h); }
+  if (w >= 1100 && !hud.classList.contains('panels-off')) { const L = $('.col-left').getBoundingClientRect().width, R = $('.col-right').getBoundingClientRect().width, B = $('#p-map').getBoundingClientRect().height + 12; camera.setViewOffset(w, h, (R - L) / 2, B / 2, w, h); }
   else camera.clearViewOffset();
   camera.updateProjectionMatrix();
   renderer.getDrawingBufferSize(resolution);
@@ -705,15 +705,31 @@ const VIS = [
   ['wcdpmt', 'Water-pool PMTs (3,352)', '#7d6a3e'], ['tt', 'Top Tracker', '#6f9a7e'], ['chimney', 'Chimney', '#9fb4c6'], ['house', 'Calibration house', '#8e9eb0'],
   ['cover', 'Pool cover', '#3a4654'], ['calib', 'Calibration systems', '#ffb547'], ['cavern', 'Cavern outline', '#5a6b7c'],
 ];
-$('#vis-list').innerHTML = VIS.map(([k, t, c]) => `<label class="chk"><i class="sw" style="background:${c}"></i>${t}<input type="checkbox" data-vis="${k}"${det.groups[k].visible ? ' checked' : ''}></label>`).join('');
-$('#vis-list').addEventListener('change', (e) => { const k = e.target.dataset.vis; if (k) det.groups[k].visible = e.target.checked; });
+const LABELLED = new Set(det.labels.map(l => l.g));
+function renderVisList() {
+  $('#vis-list').innerHTML = `<div class="vis-head"><span></span><span>Detector part</span><button data-all="show" title="Show or hide all parts">Show</button><button data-all="label" title="Turn all labels on or off">Label</button></div>` +
+    VIS.map(([k, t, c]) => `<div class="vis-row"><i class="sw" style="background:${c}"></i><span>${t}</span><input type="checkbox" data-vis="${k}" aria-label="Show ${t}"${det.groups[k].visible ? ' checked' : ''}><input type="checkbox" data-lab="${k}" aria-label="Label for ${t}"${LABELLED.has(k) ? '' : ' disabled'}${S.lab[k] ? ' checked' : ''}></div>`).join('');
+}
+renderVisList();
+$('#vis-list').addEventListener('change', (e) => {
+  const k = e.target.dataset.vis, L = e.target.dataset.lab;
+  if (k) det.groups[k].visible = e.target.checked;
+  if (L) S.lab[L] = e.target.checked;
+});
+$('#vis-list').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-all]'); if (!b) return;
+  if (b.dataset.all === 'show') { const on = !VIS.every(([k]) => det.groups[k].visible); VIS.forEach(([k]) => { if (k !== 'cavern' && k !== 'calib' || !on) det.groups[k].visible = on; }); }
+  else setAllLabels(!VIS.some(([k]) => S.lab[k]));
+  renderVisList();
+});
+function setAllLabels(on) { LABELLED.forEach(k => { S.lab[k] = on; }); renderVisList(); }
 $('#legend').innerHTML = Object.keys(KEYNAME).map(k => `<label><input type="checkbox" data-f="${k}" checked><i class="sw" style="background:${CSSC[k]}"></i>${KEYNAME[k]}</label>`).join('');
 $('#legend').addEventListener('change', (e) => { const k = e.target.dataset.f; S.filters[k] = e.target.checked ? 1 : 0; if (anim && cur) applyAnim(anim.done ? 1 : anim.p); renderPlots(); });
 $('#r-op').addEventListener('input', (e) => { S.opacity = e.target.value / 100; $('#v-op').textContent = `${e.target.value}%`; refreshMode(); });
 $('#r-cut').addEventListener('input', (e) => { S.cutAngle = +e.target.value; $('#v-cut').textContent = `${e.target.value}°`; refreshMode(); });
 $('#r-ph').addEventListener('input', (e) => { S.photons = +e.target.value; $('#v-ph').textContent = e.target.value; if (cur) cur.rays = buildRays(S.win); });
 const bindChk = (id, key, fn) => $(id).addEventListener('change', (e) => { S[key] = e.target.checked; fn && fn(); });
-bindChk('#c-labels', 'labels'); bindChk('#c-orbit', 'orbit'); bindChk('#c-autowin', 'autoWin');
+bindChk('#c-front', 'front', () => { if (anim && cur) applyAnim(anim.done ? 1 : anim.p); }); bindChk('#c-orbit', 'orbit'); bindChk('#c-autowin', 'autoWin');
 bindChk('#c-truth', 'truth', () => { if (anim && cur) applyAnim(anim.done ? 1 : anim.p); renderPlots(); });
 bindChk('#c-dark', 'dark', () => { if (cur) { cur.res = []; requestResponse(); startAnim(S.win); } });
 bindChk('#c-spmt', 'spmtMap', () => renderPlots());
@@ -739,12 +755,50 @@ window.addEventListener('keydown', (e) => {
   else if (k === 'r') setCamera(1);
   else if (k >= '1' && k <= '6') setCamera(+k);
   else if (k === 'c') setMode(MODES[(MODES.indexOf(S.mode) + 1) % MODES.length]);
-  else if (k === 'l') { S.labels = !S.labels; $('#c-labels').checked = S.labels; }
+  else if (k === 'l') setAllLabels(!VIS.some(([g]) => S.lab[g]));
+  else if (k === 'h') togglePanels();
   else if (k === 'escape') clearSelection();
 });
 
+// ------------------------------------------------------------------ panel layout: hide all, drag to resize
+const hud = $('#hud');
+const LAYOUT_DEFAULT = { left: 296, right: 318, bottom: 200 };
+let layout = { ...LAYOUT_DEFAULT };
+try { Object.assign(layout, JSON.parse(localStorage.getItem('juno-layout') || '{}')); } catch {}
+function applyLayout(save) {
+  const W = window.innerWidth, H = window.innerHeight;
+  layout.left = Math.max(220, Math.min(layout.left, W * 0.4));
+  layout.right = Math.max(240, Math.min(layout.right, W * 0.42));
+  layout.bottom = Math.max(130, Math.min(layout.bottom, H * 0.55));
+  hud.style.setProperty('--left-w', `${layout.left}px`); hud.style.setProperty('--right-w', `${layout.right}px`); hud.style.setProperty('--bottom-h', `${layout.bottom}px`);
+  stage.style.setProperty('--bottom-h', `${layout.bottom}px`);
+  if (save) try { localStorage.setItem('juno-layout', JSON.stringify(layout)); } catch {}
+  resize();
+}
+$$('.gutter').forEach(g => g.addEventListener('pointerdown', (e) => {
+  e.preventDefault(); g.setPointerCapture(e.pointerId); g.classList.add('drag');
+  const which = g.dataset.g, x0 = e.clientX, y0 = e.clientY, start = { ...layout };
+  const move = (ev) => {
+    if (which === 'left') layout.left = start.left + (ev.clientX - x0);
+    else if (which === 'right') layout.right = start.right - (ev.clientX - x0);
+    else layout.bottom = start.bottom - (ev.clientY - y0);
+    applyLayout(false);
+  };
+  const up = () => { g.classList.remove('drag'); g.removeEventListener('pointermove', move); g.removeEventListener('pointerup', up); applyLayout(true); };
+  g.addEventListener('pointermove', move); g.addEventListener('pointerup', up);
+}));
+function togglePanels() {
+  const off = hud.classList.toggle('panels-off');
+  $('#b-panels').textContent = off ? '◨ Show panels' : '◧ Hide panels';
+  stage.style.setProperty('--bottom-h', off ? '-14px' : `${layout.bottom}px`);
+  resize();
+}
+$('#b-panels').addEventListener('click', togglePanels);
+$('#b-layout').addEventListener('click', () => { layout = { ...LAYOUT_DEFAULT }; applyLayout(true); });
+
 // ------------------------------------------------------------------ boot
 refreshMode();
+applyLayout(false);
 renderGenFields();
 setCamera(1, true);
 resize();

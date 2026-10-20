@@ -44,6 +44,7 @@ export function sphereAngles(p) { const r = Math.hypot(...p) || 1; return [Math.
 
 export function drawPmtMap(cv, pm, res, opts) {
   const { g, w, h } = setupCanvas(cv);
+  if (w < 60 || h < 40) return { P: () => [0, 0], hits: [] }; // panel hidden or collapsed
   const sx = (w - 16) / (4 * Math.SQRT2), sy = (h - 14) / (2 * Math.SQRT2), s = Math.min(sx, sy), cx = w / 2, cy = h / 2;
   const P = (th, ph) => { const [X, Y] = mollweide(th, ph); return [cx + X * s, cy - Y * s]; };
   g.fillStyle = css('--plot-bg'); g.strokeStyle = css('--line');
@@ -101,6 +102,7 @@ function axes(g, w, h, m, xr, yr, xl, yl, log = false) {
 
 export function drawTimeHist(cv, pm, res, opts = {}) {
   const { g, w, h } = setupCanvas(cv);
+  if (w < 60 || h < 40) return;
   if (!res || !res.idx.length) { g.fillStyle = css('--fg2'); g.font = `11px ${css('--mono')}`; g.textAlign = 'center'; g.fillText(opts.waiting ? 'computing…' : 'no hits', w / 2, h / 2); return; }
   let tmin = Infinity; for (let i = 0; i < res.idx.length; i++) if (!res.dark[i] && res.idx[i] < pm.nL) tmin = Math.min(tmin, res.t[i]);
   if (!Number.isFinite(tmin)) tmin = 0;
@@ -120,6 +122,7 @@ export function drawTimeHist(cv, pm, res, opts = {}) {
 
 export function drawProjection(cv, sim, opts) {
   const { g, w, h } = setupCanvas(cv);
+  if (w < 60 || h < 40) return;
   const side = opts.view === 'side'; // side: x-z ; top: x-y
   const m = { l: 30, r: 6, t: 6, b: 24 };
   const span = side ? [-24, 24] : [-24, 24];
