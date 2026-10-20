@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>JUNO Event Display</title>
+
+<meta name="description" content="Interactive 3D event display for the JUNO liquid scintillator detector with built-in event generation and GENIE gst.root loading.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<style>
+/* Layout: full-viewport WebGL stage; instrument panels float in a 3x2 grid around an empty centre. */
+:root {
+  --bg: #030E17;
+  --panel: rgba(6, 26, 42, 0.72);
+  --panel-solid: #071b2b;
+  --line: rgba(110, 139, 255, 0.26);
+  --grid: rgba(127, 152, 174, 0.16);
+  --plot-bg: rgba(3, 14, 23, 0.6);
+  --fg: #E6F0FA;
+  --fg2: #7F98AE;
+  --accent: #2251FF;
+  --hi: #6E8BFF;
+  --ok: #3DDC84;
+  --warn: #FFB547;
+  --display: "Chakra Petch", "Rajdhani", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --c-mu: #ff4d5e; --c-e: #3ddc84; --c-gamma: #ffd34d; --c-chad: #4da3ff; --c-p: #b07cff; --c-n: #9aa7b4; --c-nu: #e6f0fa;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font: 13px/1.45 var(--body); margin: 0; overflow: hidden; -webkit-font-smoothing: antialiased; }
+button, select, input { font: inherit; color: inherit; }
+:focus-visible { outline: 1.5px solid var(--hi); outline-offset: 2px; }
+
+#stage { position: fixed; inset: 0; background: radial-gradient(ellipse at 50% 45%, #08243a 0%, #041523 45%, var(--bg) 80%); }
+#gl { display: block; width: 100%; height: 100%; touch-action: none; }
+.fx-vignette, .fx-scan { position: absolute; inset: 0; pointer-events: none; }
+.fx-vignette { background: radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(0, 4, 10, 0.75) 100%); }
+.fx-scan { background: repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 3px); mix-blend-mode: screen; }
+#labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.lbl { position: absolute; transform: translate(10px, -50%); font: 500 10px/1 var(--mono); letter-spacing: 0.06em; color: #bcd0e6; white-space: nowrap; padding: 3px 6px; background: rgba(3, 14, 23, 0.6); border-left: 1px solid var(--hi); }
+.lbl::before { content: ""; position: absolute; left: -11px; top: 50%; width: 10px; height: 1px; background: var(--hi); }
+#banner { position: absolute; left: 50%; top: 16%; transform: translateX(-50%); font: 500 12px var(--mono); letter-spacing: 0.08em; color: var(--warn); background: rgba(3, 14, 23, 0.8); border: 1px solid rgba(255, 181, 71, 0.4); padding: 6px 12px; pointer-events: none; }
+#nogl { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--fg2); }
+.stage-tools { position: absolute; left: 50%; transform: translateX(-50%); bottom: 236px; display: flex; gap: 8px; pointer-events: auto; }
+.stage-hint { position: absolute; left: 50%; transform: translateX(-50%); bottom: 214px; font: 10px var(--mono); letter-spacing: 0.14em; color: var(--fg2); text-transform: uppercase; white-space: nowrap; pointer-events: none; }
+#drop { position: absolute; inset: 24px; border: 2px dashed var(--hi); display: grid; place-items: center; font: 600 16px var(--display); letter-spacing: 0.1em; background: rgba(3, 14, 23, 0.7); pointer-events: none; }
+
+#hud { position: fixed; inset: 0; display: grid; gap: 12px; padding-block: 16px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  grid-template-columns: 296px minmax(0, 1fr) 318px; grid-template-rows: minmax(0, 1fr) 200px;
+  grid-template-areas: "left . right" "map seq plot"; pointer-events: none; }
+.col { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto; scrollbar-width: thin; pointer-events: none; }
+.col > * { pointer-events: auto; flex: none; }
+.col-left { grid-area: left; } .col-right { grid-area: right; }
+#p-map { grid-area: map; } #p-seq { grid-area: seq; } #p-plot { grid-area: plot; }
+
+.panel { position: relative; background: var(--panel); border: 1px solid var(--line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); pointer-events: auto; min-width: 0;
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px)); display: flex; flex-direction: column; }
+.panel::before { content: ""; position: absolute; left: 0; top: 0; width: 26px; height: 2px; background: var(--accent); }
+.panel::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(to top right, transparent calc(50% - 0.8px), var(--line) 50%, transparent calc(50% + 0.8px)) right top / 12px 12px no-repeat,
+              linear-gradient(to top right, transparent calc(50% - 0.8px), var(--line) 50%, transparent calc(50% + 0.8px)) left bottom / 12px 12px no-repeat; }
+.ph { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 12px 7px; font: 600 11px/1.2 var(--display); letter-spacing: 0.16em; text-transform: uppercase; }
+.ph .aux { font: 500 9.5px var(--mono); letter-spacing: 0.12em; color: var(--fg2); }
+.ph button.col-btn { background: none; border: 0; color: var(--fg2); cursor: pointer; padding: 0 2px; font-size: 14px; line-height: 1; }
+.pb { padding: 2px 12px 12px; display: flex; flex-direction: column; gap: 9px; min-height: 0; }
+.panel.collapsed .pb { display: none; }
+
+.masthead { pointer-events: auto; padding: 2px 2px 4px; display: flex; flex-direction: column; gap: 6px; }
+.eyebrow { font: 500 10px var(--mono); letter-spacing: 0.24em; color: var(--fg2); text-transform: uppercase; }
+.title { display: flex; align-items: center; gap: 12px; }
+.logo { width: 34px; height: 34px; border-radius: 50%; border: 2px solid #c9d6e6; display: grid; place-items: center; flex: none; }
+.logo i { width: 22px; height: 22px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #e8f2ff, #a9c4e4 55%, #3a5d86); }
+h1 { margin: 0; font: 600 27px/1 var(--display); letter-spacing: 0.01em; text-wrap: balance; }
+h1 b { color: var(--accent); font-weight: 600; margin: 0 0.14em; }
+.sub { font: 400 11px var(--body); color: var(--fg2); }
+.figs { font: 500 10.5px var(--mono); color: #b9cbe0; letter-spacing: 0.04em; }
+.evblock { margin-top: 8px; display: flex; flex-direction: column; gap: 5px; }
+.evnum { display: flex; align-items: baseline; gap: 10px; }
+.evnum span { font: 500 10px var(--mono); letter-spacing: 0.2em; color: var(--fg2); }
+.evnum b { font: 500 26px var(--mono); letter-spacing: 0.06em; }
+.evcat { font: 500 18px var(--display); }
+.badge { align-self: flex-start; font: 600 9.5px var(--mono); letter-spacing: 0.18em; color: #cfe0ff; border: 1px solid var(--hi); padding: 4px 8px; display: inline-flex; gap: 6px; align-items: center; }
+.badge::before { content: ""; width: 6px; height: 6px; background: var(--hi); }
+.badge.genie { border-color: var(--warn); color: #ffe2b0; } .badge.genie::before { background: var(--warn); }
+.evmeta { font: 10.5px var(--mono); color: var(--fg2); }
+
+label.row, .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.row > span:first-child, .lab { font: 500 9.5px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--fg2); }
+.chk { display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer; padding: 1.5px 0; }
+.chk input { appearance: none; width: 14px; height: 14px; border: 1px solid var(--hi); margin: 0 0 0 auto; display: grid; place-items: center; cursor: pointer; flex: none; }
+.chk input:checked { background: var(--accent); border-color: var(--accent); }
+.chk input:checked::after { content: ""; width: 6px; height: 3px; border: solid #fff; border-width: 0 0 1.5px 1.5px; transform: rotate(-45deg) translate(1px, -1px); }
+.sw { width: 9px; height: 9px; flex: none; }
+select, input[type=number], input[type=text] { background: rgba(3, 14, 23, 0.7); border: 1px solid var(--line); padding: 5px 7px; font: 12px var(--mono); min-width: 0; border-radius: 0; }
+select { padding-right: 22px; }
+input[type=number] { width: 82px; text-align: right; }
+input[type=range] { width: 100%; accent-color: var(--hi); height: 18px; }
+.btn { background: rgba(34, 81, 255, 0.12); border: 1px solid var(--line); padding: 6px 10px; cursor: pointer; font: 600 11px var(--display); letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; }
+.btn:hover { border-color: var(--hi); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn kbd { font: 9px var(--mono); opacity: 0.7; }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 3px; }
+.seg button { background: rgba(3, 14, 23, 0.6); border: 1px solid var(--line); padding: 6px 4px; cursor: pointer; font: 500 10.5px var(--mono); min-height: 30px; }
+.seg button[aria-pressed=true] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
+.hr { height: 1px; background: var(--line); margin: 2px 0; }
+.note { font: 10.5px/1.4 var(--body); color: var(--fg2); }
+.status { font: 10.5px var(--mono); color: var(--fg2); word-break: break-word; }
+.status.err { color: #ff8a8a; } .status.ok { color: var(--ok); }
+
+.kv { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 10px; }
+.kv div { min-width: 0; }
+.kv span { display: block; font: 9px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg2); }
+.kv b { display: block; font: 500 13px var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bignum { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.bignum b { font: 500 34px/1 var(--display); font-variant-numeric: tabular-nums; }
+.bignum span { font: 11px var(--mono); color: var(--fg2); }
+.pill { font: 600 9px var(--mono); letter-spacing: 0.12em; padding: 2px 6px; border: 1px solid currentColor; }
+.pill.yes { color: var(--ok); } .pill.no { color: #ff8a8a; }
+.objlist { display: flex; flex-direction: column; gap: 3px; max-height: 168px; overflow-y: auto; }
+.obj { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 5px 8px; border: 1px solid var(--line); background: rgba(3, 14, 23, 0.45); cursor: pointer; font: 11.5px var(--body); text-align: left; }
+.obj[aria-pressed=true] { border-color: var(--hi); background: rgba(34, 81, 255, 0.18); }
+.obj em { font: normal 11px var(--mono); color: #b9cbe0; font-variant-numeric: tabular-nums; }
+.obj small { color: var(--fg2); font-size: 10.5px; }
+.readout { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 10px; font: 11px var(--mono); }
+.readout dt { color: var(--fg2); } .readout dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 4px 10px; font: 10.5px var(--body); }
+.legend label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+.legend input { accent-color: var(--hi); margin: 0; }
+
+canvas.plot { width: 100%; flex: 1 1 0px; min-height: 0; height: 0; display: block; }
+#p-map .pb, #p-plot .pb, #p-seq .pb { flex: 1; }
+.cbar { height: 6px; width: 100%; }
+.cbar-l { display: flex; justify-content: space-between; font: 9.5px var(--mono); color: var(--fg2); }
+
+.steps { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.step { font: 500 10.5px var(--body); color: var(--fg2); padding-bottom: 6px; border-bottom: 2px solid var(--grid); min-width: 0; }
+.step b { display: block; font: 500 9px var(--mono); color: var(--fg2); }
+.step.on { color: var(--fg); border-color: var(--hi); } .step.done { color: #b9cbe0; border-color: rgba(110, 139, 255, 0.5); }
+.wins { display: flex; flex-wrap: wrap; gap: 4px; }
+.wins button { background: rgba(3, 14, 23, 0.6); border: 1px solid var(--line); padding: 3px 7px; font: 10.5px var(--mono); cursor: pointer; min-height: 26px; }
+.wins button[aria-pressed=true] { border-color: var(--warn); color: #ffe2b0; }
+.log { font: 10.5px/1.6 var(--mono); color: #9fb4c9; overflow-y: auto; min-height: 0; flex: 1; }
+.log div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.log div:hover { color: var(--fg); }
+.diag { font: 9.5px var(--mono); color: var(--fg2); letter-spacing: 0.06em; }
+.tabs { display: flex; gap: 3px; }
+.tabs button { background: none; border: 1px solid transparent; color: var(--fg2); font: 500 9.5px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 6px; cursor: pointer; }
+.tabs button[aria-pressed=true] { color: var(--fg); border-color: var(--line); }
+.hidden-sm { }
+
+@media (max-width: 1100px) {
+  body { overflow: auto; }
+  #stage { position: relative; height: 62vh; min-height: 420px; }
+  .stage-tools { bottom: 14px; } .stage-hint { display: none; }
+  #hud { position: static; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto; grid-template-areas: "left right" "map plot" "seq seq"; }
+  .col { overflow: visible; }
+  #p-map, #p-plot { height: 300px; } #p-seq { min-height: 220px; }
+}
+@media (max-width: 720px) {
+  #hud { grid-template-columns: minmax(0, 1fr); grid-template-areas: "left" "right" "map" "plot" "seq"; }
+  h1 { font-size: 23px; }
+  .kv { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="gl" aria-label="3D view of the JUNO detector and the current event"></canvas>
+  <div id="labels"></div>
+  <div class="fx-vignette"></div><div class="fx-scan"></div>
+  <div id="banner" hidden></div>
+  <div id="drop" hidden>Drop a GENIE .gst.root file to load its events</div>
+  <div id="nogl" hidden><div><p style="font:600 16px var(--display)">WebGL is not available in this browser.</p><p>The 3D view needs WebGL. Try a recent Chrome, Edge, Firefox or Safari, and check that hardware acceleration is switched on.</p></div></div>
+  <div class="stage-tools"><button class="btn" id="b-reset" title="Reset camera (R)">↺ Reset view</button><button class="btn" id="b-shot" title="Save a PNG of the 3D view">⤓ Capture</button></div>
+  <div class="stage-hint">Drag to orbit · scroll to zoom · right-drag to pan · click a track or PMT</div>
+</div>
+
+<div id="hud">
+  <div class="col col-left">
+    <header class="masthead">
+      <div class="eyebrow">Jiangmen Underground Neutrino Observatory</div>
+      <div class="title"><div class="logo"><i></i></div><h1>JUNO<b>//</b>Event Display</h1></div>
+      <div class="sub">Liquid scintillator · Acrylic vessel · 20" + 3" PMTs · Water pool · Top Tracker</div>
+      <div class="figs">20 kt LS · R<sub>AV</sub> = 17.7 m · ~1785 p.e./MeV</div>
+      <div class="evblock">
+        <div class="evnum"><span>EVENT</span><b id="h-num">000001</b></div>
+        <div class="evcat" id="h-cat">Atmospheric νμ CC</div>
+        <div class="badge" id="h-badge">SIMULATED · DEMO</div>
+        <div class="evmeta" id="h-meta">seed —</div>
+      </div>
+    </header>
+
+    <section class="panel" id="p-det">
+      <div class="ph"><span>01 / Detector</span><button class="col-btn" aria-label="Collapse panel" data-col>–</button></div>
+      <div class="pb">
+        <div id="vis-list"></div>
+        <label class="row"><span>Layer opacity</span><span class="diag" id="v-op">50%</span></label>
+        <input type="range" id="r-op" min="5" max="100" value="50" aria-label="Layer opacity">
+        <label class="row"><span>Cutaway angle</span><span class="diag" id="v-cut">110°</span></label>
+        <input type="range" id="r-cut" min="30" max="180" value="110" aria-label="Cutaway angle">
+        <div class="hr"></div>
+        <div class="lab">Particles shown</div>
+        <div class="legend" id="legend"></div>
+        <div class="grid2">
+          <label class="chk">Labels<input type="checkbox" id="c-labels" checked></label>
+          <label class="chk">Truth tracks<input type="checkbox" id="c-truth" checked></label>
+          <label class="chk">Auto orbit<input type="checkbox" id="c-orbit"></label>
+          <label class="chk">Dark noise<input type="checkbox" id="c-dark"></label>
+          <label class="chk">3" PMTs on map<input type="checkbox" id="c-spmt"></label>
+          <label class="chk">Auto Δt windows<input type="checkbox" id="c-autowin" checked></label>
+        </div>
+        <label class="row"><span>PMT colour</span>
+          <div class="seg" style="width:150px"><button data-pc="charge" aria-pressed="true">charge</button><button data-pc="time" aria-pressed="false">time</button></div></label>
+        <label class="row"><span>Photon rays</span><span class="diag" id="v-ph">250</span></label>
+        <input type="range" id="r-ph" min="0" max="600" step="25" value="250" aria-label="Number of animated photon rays">
+      </div>
+    </section>
+  </div>
+
+  <div class="col col-right">
+    <section class="panel" id="p-run">
+      <div class="ph"><span>Run control</span><span class="aux" id="run-state">PAUSED</span></div>
+      <div class="pb">
+        <div style="display:grid;grid-template-columns:1fr auto auto;gap:6px">
+          <button class="btn primary" id="b-play" title="Play / pause (Space)">▶ Play <kbd>SPACE</kbd></button>
+          <button class="btn" id="b-next" title="Next event (N)">Next ⇥</button>
+          <button class="btn" id="b-replay" title="Replay this event" aria-label="Replay this event">↻</button>
+        </div>
+        <label class="row"><span>Event category</span>
+          <select id="s-cat" style="width:178px"></select></label>
+        <label class="row"><span>Rate</span>
+          <div class="seg" id="seg-rate" style="width:178px" title="Slowed educational playback. Real light reaches the PMTs in about 100 ns."><button data-rate="0.5" aria-pressed="true">0.5/s</button><button data-rate="1" aria-pressed="false">1/s</button><button data-rate="2" aria-pressed="false">2/s</button></div></label>
+        <label class="row"><span>Camera</span>
+          <select id="s-cam" style="width:178px">
+            <option value="1">1 · Isometric cutaway</option><option value="2">2 · Top-down along z</option><option value="3">3 · Side view (x–z)</option>
+            <option value="4">4 · Vertex close-up</option><option value="5">5 · Full detector</option><option value="6">6 · Inside view (PMT wall)</option>
+          </select></label>
+        <div class="seg" id="seg-mode"><button data-mode="cutaway" aria-pressed="true">Cutaway</button><button data-mode="transparent" aria-pressed="false">Transp.</button><button data-mode="solid" aria-pressed="false">Solid</button><button data-mode="exploded" aria-pressed="false">Exploded</button></div>
+      </div>
+    </section>
+
+    <section class="panel" id="p-gen">
+      <div class="ph"><span>02 / Generator</span><button class="col-btn" aria-label="Collapse panel" data-col>–</button></div>
+      <div class="pb">
+        <div class="seg" id="seg-src"><button data-src="demo" aria-pressed="true">Built-in generator</button><button data-src="genie" aria-pressed="false">GENIE file</button></div>
+        <div id="gen-demo" class="pb" style="padding:0">
+          <div class="grid2">
+            <label class="row"><span>Events</span><input type="number" id="i-n" min="1" max="1000" value="20"></label>
+            <label class="row"><span>Seed</span><input type="number" id="i-seed" min="1" value="2026"></label>
+          </div>
+          <div id="gen-fields"></div>
+        </div>
+        <div id="gen-genie" class="pb" style="padding:0" hidden>
+          <p class="note">Open a <b>.gst.root</b> file made with <code>gntpc -f gst</code>. It is read inside your browser; nothing is uploaded.</p>
+          <div class="grid2">
+            <label class="row"><span>First</span><input type="number" id="i-first" min="0" value="0"></label>
+            <label class="row"><span>Read</span><input type="number" id="i-max" min="1" max="1000" value="200"></label>
+          </div>
+          <label class="btn" for="f-gst" style="justify-content:center">Open .gst.root file</label>
+          <input type="file" id="f-gst" accept=".root" hidden>
+          <div class="status" id="gst-status">No file loaded. You can also drop a file onto the 3D view.</div>
+        </div>
+        <button class="btn primary" id="b-gen">Generate run</button>
+        <div class="hr"></div>
+        <div class="lab">Export for analysis</div>
+        <div class="grid2">
+          <button class="btn" id="b-xjson" title="Truth particles, windows and all PMT hits">Event JSON</button>
+          <button class="btn" id="b-xcsv" title="One row per fired PMT">Hits CSV</button>
+          <button class="btn" id="b-bcsv" title="One summary row per event in the run">Run CSV</button>
+          <button class="btn" id="b-bjson" title="Truth particles for every event in the run">Run JSON</button>
+        </div>
+        <div class="status" id="x-status"></div>
+      </div>
+    </section>
+
+    <section class="panel" id="p-sum">
+      <div class="ph"><span>03 / Event summary</span><span class="aux" id="sum-win">PROMPT</span></div>
+      <div class="pb">
+        <div class="bignum"><b id="s-big">—</b><span id="s-bigl">visible energy</span></div>
+        <div class="kv" id="s-kv"></div>
+        <div class="hr"></div>
+        <div class="row"><span>Select an object</span><span class="diag" id="s-cnt"></span></div>
+        <div class="objlist" id="s-obj"></div>
+        <dl class="readout" id="s-read"></dl>
+      </div>
+    </section>
+  </div>
+
+  <section class="panel" id="p-map">
+    <div class="ph"><span>PMT map</span><span class="aux">θ–φ · MOLLWEIDE</span></div>
+    <div class="pb">
+      <canvas class="plot" id="cv-map" aria-label="PMT hit map, unrolled sphere"></canvas>
+      <canvas class="cbar" id="cv-cbar"></canvas>
+      <div class="cbar-l"><span id="cb-lo">low</span><span id="cb-mode">charge (log p.e.)</span><span id="cb-hi">high</span></div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-seq">
+    <div class="ph"><span>Event sequence</span><span class="aux" id="diag">—</span></div>
+    <div class="pb">
+      <div class="steps" id="steps">
+        <div class="step"><b>01</b>Neutrino arrives</div><div class="step"><b>02</b>Interaction</div><div class="step"><b>03</b>Light emission</div><div class="step"><b>04</b>PMT hits</div><div class="step"><b>05</b>Reconstruction</div>
+      </div>
+      <div class="row"><span>Readout windows</span><span class="diag">1008 ns each</span></div>
+      <div class="wins" id="wins"></div>
+      <div class="log" id="log"></div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-plot">
+    <div class="ph"><div class="tabs" id="plot-tabs"><button data-pt="time" aria-pressed="true">Hit times</button><button data-pt="side" aria-pressed="false">Side x–z</button><button data-pt="top" aria-pressed="false">Top x–y</button></div></div>
+    <div class="pb"><canvas class="plot" id="cv-plot" aria-label="Plot"></canvas></div>
+  </section>
+</div>
+
+<script type="module" src="./js/app.js"></script>
+</body>
+</html>
