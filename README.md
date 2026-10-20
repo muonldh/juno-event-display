@@ -3,6 +3,7 @@
 An interactive 3D event display for the JUNO detector that runs entirely in a web browser.
 
 - Built-in generator for atmospheric νμ / νe CC, atmospheric NC, reactor IBD and cosmic muons, with tunable energy, direction, flavour, vertex and number of events.
+- Custom mode: aim the neutrino (zenith, azimuth), set its energy, and pick the interaction (QE, MEC/2p2h, RES, DIS, coherent π, or automatic by energy).
 - Opens GENIE `.gst.root` files directly in the browser (no server, no ROOT install).
 - Optional Honda (HAKKM) flux file, the same one used by `gevgen_atmo`.
 - Simplified light model: scintillation + Cherenkov light, 17,596 20" PMTs, 25,587 3" PMTs, 3,352 water-pool PMTs, multiplicity trigger, approximate vertex/energy/track reconstruction.
@@ -63,18 +64,22 @@ All geometry constants are in `js/detector.js`, each marked `[P]` (from the pape
 This is an educational display, not JUNOSW, Geant4 or real JUNO data.
 
 - **PMT positions** are a deterministic quasi-uniform layout with the correct counts and coverage, not the engineering map. Vertical placement of the pool, TT heights and chimney are approximate.
-- **Built-in generator**: free-nucleon kinematics (no Fermi motion, no FSI) with simple QE / Δ resonance / DIS phase-space models; cross sections are not modelled, so event rates and process fractions are illustrative. Extra low-energy "nuclear" neutrons are added for illustration and are flagged in the particle list. GENIE files give the real generator output.
-- **Particle transport**: straight tracks with continuous energy loss (no magnetic field in JUNO), parameterised EM showers (X₀ = 0.52 m), Compton chains for MeV γ, simple hadronic interactions, a neutron random walk ending in capture on H (2.223 MeV) or ¹²C (4.946 MeV) after τ ≈ 200 µs. Not a substitute for Geant4.
+- **Built-in generator**: free-nucleon kinematics (no Fermi motion, no FSI) with simple QE / MEC (nucleon pair) / Δ resonance / DIS / coherent-π models; the automatic process mix uses approximate CC cross-section shapes, not a GENIE tune; cross sections are not modelled, so event rates and process fractions are illustrative. Extra low-energy "nuclear" neutrons are added for illustration and are flagged in the particle list. GENIE files give the real generator output.
+- **Particle transport**: straight tracks with continuous energy loss (no magnetic field in JUNO), parameterised EM showers (X₀ = 0.52 m), Compton chains for MeV γ, simple hadronic interactions, stopped μ⁻ decay (τ = 2.026 µs) or are captured on ¹²C (7.8%, emitting neutrons), stopped μ⁺ decay (τ = 2.197 µs), a neutron random walk ending in capture on H (2.223 MeV) or ¹²C (4.946 MeV) after τ ≈ 200 µs. Not a substitute for Geant4.
 - **Light**: isotropic scintillation with Birks-like quenching for protons and hadronic deposits, a 6% directional Cherenkov component on a 48° cone, straight-line propagation with attenuation, no refraction or reflection at the acrylic, no re-emission. LS energy non-linearity is not modelled.
 - **Reconstruction**: charge-weighted vertex with a bias correction, energy from total p.e., and a two-cluster entry/exit fit for muon-like events. These are simple estimates to compare with truth, not JUNO's OMILREC / VTREP / JVertex.
 - **Cosmic muons**: approximate underground spectrum (mean ~200 GeV) and zenith distribution; the mountain profile is not included.
 - **Timing**: animation is slowed educational playback. Delayed windows (Michel decay, neutron captures) are shown with compressed Δt.
 - Downloads are blocked inside some embedded previews; they work on the GitHub Pages site.
 
-## Files
+## Repository layout
+
+The live site is the single `index.html` at the top of the repository; it contains all the code. The `source/` folder holds the same code as separate, readable files for editing. After editing them, rebuild `index.html` (ask Claude, or run `python3 build_single.py` with esbuild installed).
+
+## Source files
 
 ```
-index.html        page layout and styles
+source/index.html  page layout and styles
 js/app.js         interface, animation, rendering loop
 js/scene.js       Three.js detector model and event visuals
 js/physics.js     generators, propagation, light/PMT response, reconstruction
