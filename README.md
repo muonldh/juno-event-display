@@ -1,40 +1,29 @@
-# JUNO // Event Display
+# JUNO Event Display
 
-An interactive 3D event display for the JUNO detector that runs entirely in a web browser.
+An interactive 3D event display for the JUNO detector that runs entirely in a web browser. It is built for visualisation and teaching. It is not an official JUNO Collaboration product and shows no real JUNO data.
 
-- Built-in generator for atmospheric νμ / νe CC, atmospheric NC, reactor IBD and cosmic muons, with tunable energy, direction, flavour, vertex and number of events.
+- In-browser generator for atmospheric νμ / νe CC, atmospheric NC, reactor IBD and cosmic muons, with tunable energy, direction, flavour, vertex and number of events.
+- Several interactions at once: stack up to 100 independent interactions in one readout window.
 - Custom mode: aim the neutrino (zenith, azimuth), set its energy, and pick the interaction (QE, MEC/2p2h, RES, DIS, coherent π, or automatic by energy).
-- Opens GENIE `.gst.root` files directly in the browser (no server, no ROOT install).
-- Optional Honda (HAKKM) flux file, the same one used by `gevgen_atmo`.
+- Optional Honda (HAKKM) atmospheric flux table to sample energy and direction.
 - Simplified light model: scintillation + Cherenkov light, 17,596 20" PMTs, 25,587 3" PMTs, 3,352 water-pool PMTs, multiplicity trigger, approximate vertex/energy/track reconstruction.
-- Export of truth particles, PMT hits (JSON/CSV) and per-run summaries for analysis.
+- Export of truth particles, PMT hits (JSON/CSV) and per-run summaries. The data are illustrative and not suitable for physics analysis.
 
 ## Run it
 
 Open the GitHub Pages link of this repository. No installation is needed.
 
-To run it on your own computer instead, the page must be served (opening `index.html` by double-click does not work because of browser security rules for modules):
-
-```bash
-python3 -m http.server 8000
-# then open http://localhost:8000
-```
-
-## Use your GENIE files
-
-1. Click **GENIE file** in the Generator panel.
-2. Click **Open .gst.root file** (or drag the file onto the 3D view).
-3. Choose the first entry and how many to read (up to 1000).
-
-The file never leaves your computer. Vertices in gst are in metres (SI) and are used as JUNO coordinates (origin at the CD centre, z up). If the vertices look like centimetres, the page converts them automatically.
+The single `index.html` also works when opened directly from your computer, as long as you are online (three.js loads from a CDN).
 
 ## Keyboard
 
 | Key | Action |
 |---|---|
-| Space | Play / pause |
+| Space | Fire one event (Manual) or play / pause |
 | N | Next event |
 | R | Reset camera |
+| X | Clear event (empty detector) |
+| F | Freeze / resume the animation |
 | 1–6 | Camera presets |
 | C | Cycle geometry mode |
 | L | Labels on/off |
@@ -64,7 +53,7 @@ All geometry constants are in `js/detector.js`, each marked `[P]` (from the pape
 This is an educational display, not JUNOSW, Geant4 or real JUNO data.
 
 - **PMT positions** are a deterministic quasi-uniform layout with the correct counts and coverage, not the engineering map. Vertical placement of the pool, TT heights and chimney are approximate.
-- **Built-in generator**: free-nucleon kinematics (no Fermi motion, no FSI) with simple QE / MEC (nucleon pair) / Δ resonance / DIS / coherent-π models; the automatic process mix uses approximate CC cross-section shapes, not a GENIE tune; cross sections are not modelled, so event rates and process fractions are illustrative. Extra low-energy "nuclear" neutrons are added for illustration and are flagged in the particle list. GENIE files give the real generator output.
+- **Generator**: free-nucleon kinematics (no Fermi motion, no FSI) with simple QE / MEC (nucleon pair) / Δ resonance / DIS / coherent-π models; the automatic process mix uses approximate CC cross-section shapes, not a GENIE tune; cross sections are not modelled, so event rates and process fractions are illustrative. Extra low-energy "nuclear" neutrons are added for illustration and are flagged in the particle list.
 - **Particle transport**: straight tracks with continuous energy loss (no magnetic field in JUNO), parameterised EM showers (X₀ = 0.52 m), Compton chains for MeV γ, simple hadronic interactions, stopped μ⁻ decay (τ = 2.026 µs) or are captured on ¹²C (7.8%, emitting neutrons), stopped μ⁺ decay (τ = 2.197 µs), a neutron random walk ending in capture on H (2.223 MeV) or ¹²C (4.946 MeV) after τ ≈ 200 µs. Not a substitute for Geant4.
 - **Light**: isotropic scintillation with Birks-like quenching for protons and hadronic deposits, a 6% directional Cherenkov component on a 48° cone, straight-line propagation with attenuation, no refraction or reflection at the acrylic, no re-emission. LS energy non-linearity is not modelled.
 - **Reconstruction**: charge-weighted vertex with a bias correction, energy from total p.e., and a two-cluster entry/exit fit for muon-like events. These are simple estimates to compare with truth, not JUNO's OMILREC / VTREP / JVertex.
@@ -85,8 +74,7 @@ js/scene.js       Three.js detector model and event visuals
 js/physics.js     generators, propagation, light/PMT response, reconstruction
 js/detector.js    geometry and detector constants
 js/plots.js       PMT map, time histogram, projections
-js/gst.js         GENIE gst reader (JSROOT)
 js/worker.js      background thread for the PMT response
 ```
 
-Libraries load from cdn.jsdelivr.net: three.js 0.160.0 and JSROOT 7.10.3.
+three.js 0.160.0 loads from cdn.jsdelivr.net.
