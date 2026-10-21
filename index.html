@@ -240,6 +240,7 @@ body.no-top #hud { padding-top: 16px; }
   #p-map, #p-plot { height: 300px; } #p-seq { min-height: 220px; }
 }
 @media (max-width: 720px) {
+  .tb-actions { flex-wrap: wrap; min-width: 0; flex: 1 1 100%; } .tb-link { padding: 5px 7px; font-size: 10.5px; } .tb-actions .tb-close { margin-left: auto; }
   .tb-actions button:not(.tb-close) { padding: 6px 6px; font-size: 10.5px; }
   #hud { grid-template-columns: minmax(0, 1fr); grid-template-areas: "left" "right" "map" "plot" "seq"; }
   h1 { font-size: 23px; }
